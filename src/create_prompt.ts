@@ -1,5 +1,5 @@
 import { PrismaClient, Product, Prisma } from "@prisma/client";
-import cheerio from "cheerio";
+import { load } from "cheerio";
 
 const prisma = new PrismaClient();
 
@@ -10,7 +10,10 @@ async function fetchAllProducts() {
         ProductVariant: true,
       },
     });
-    describeProduct(products[3]);
+
+    products.forEach((product: ProductWithVariants) => {
+      describeProduct(product);
+    });
   } catch (error) {
     console.error("Error fetching products:", error);
     throw error;
@@ -28,9 +31,9 @@ async function describeProduct(product: ProductWithVariants) {
   let prompt = "";
   prompt += `Title: ${product.title}\n`;
 
-  //description
-  const $ = cheerio.load(product.bodyHtml);
-  prompt += `${$("body").text()}\n\n`;
+  //features
+  const features = extractFeatures(product.bodyHtml);
+  prompt += `Features: ${features.join("\n")}\n\n`;
 
   //colors
   const containsColor: Record<string, boolean> = {};
@@ -62,5 +65,22 @@ async function describeProduct(product: ProductWithVariants) {
   console.log(prompt);
 }
 
+function extractFeatures(htmlString: string) {
+  const $ = load(htmlString, null, true);
+
+  function extractTexts($el: any, result: string[]) {
+    if ($el.children().length === 0) {
+      result.push($el.text());
+    }
+    $el.children().each((i: number, el: any) => {
+      extractTexts($(el), result);
+    });
+  }
+
+  const result: string[] = [];
+  extractTexts($("body"), result);
+
+  return result;
+}
 // Usage
 fetchAllProducts();
